@@ -83,7 +83,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Waiting for IPs", id)
-	host := h.Endpoints.GetHost(r.Context(), deploy, "http")
+	host, err := h.Endpoints.AwaitHostAddress(r.Context(), deploy, "http")
+	if err != nil {
+		log.Printf("timeout finding the host address %v", err)
+		w.WriteHeader(http.StatusRequestTimeout)
+		w.Write([]byte(fmt.Sprintf("Request timed out for model: %v", modelName)))
+		return
+	}
 	log.Printf("Got host: %v, id: %v\n", host, id)
 
 	// TODO: Avoid creating new reverse proxies for each request.

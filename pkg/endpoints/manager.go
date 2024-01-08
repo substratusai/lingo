@@ -110,10 +110,36 @@ func (r *Manager) getEndpoints(service string) *endpointGroup {
 	return e
 }
 
-func (r *Manager) GetHost(ctx context.Context, service, portName string) string {
-	return r.getEndpoints(service).getHost(portName)
+// AwaitHostAddress returns the host address with the lowest number of in-flight requests. It will block until the host address
+// becomes available or the context times out.
+//
+// It returns a string in the format "host:port" or error on timeout
+func (r *Manager) AwaitHostAddress(ctx context.Context, service, portName string) (string, error) {
+	return r.getEndpoints(service).getBestHost(ctx, portName)
 }
 
-func (r *Manager) GetAllHosts(ctx context.Context, service, portName string) []string {
-	return r.getEndpoints(service).getAllHosts(portName)
+// GetAllHosts retrieves the list of all hosts for a given service and port.
+// It returns a slice of strings representing the hosts or an error if any context timeout occurred.
+func (r *Manager) GetAllHosts(ctx context.Context, service, portName string) ([]string, error) {
+	return execWithCtxAbort(ctx, func() []string { return r.getEndpoints(service).getAllHosts(portName) })
+}
+
+func execWithCtxAbort[T any](ctx context.Context, f func() T) (T, error) {
+	resultChan := make(chan T, 1)
+	go func() {
+		select {
+		case resultChan <- f():
+		case <-ctx.Done(): // exit go routine, too
+		}
+		close(resultChan)
+	}()
+	var result T
+	select {
+	case <-ctx.Done():
+		// keep resultChan open to prevent panic on write
+		// the channel
+		return result, ctx.Err()
+	case result = <-resultChan:
+		return result, nil
+	}
 }
