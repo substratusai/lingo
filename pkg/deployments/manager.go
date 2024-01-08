@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,6 +49,8 @@ type Manager struct {
 	// modelToDeployment maps model names to deployment names. A single deployment
 	// can serve multiple models.
 	modelToDeployment map[string]string
+
+	bootstrapped atomic.Bool
 }
 
 func (r *Manager) SetupWithManager(mgr ctrl.Manager) error {
@@ -73,33 +77,41 @@ func (r *Manager) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result,
 		return ctrl.Result{}, fmt.Errorf("get: %w", err)
 	}
 
-	if ann := d.GetAnnotations(); ann != nil {
-		modelCSV, ok := ann[lingoDomain+"/models"]
-		if !ok {
-			return ctrl.Result{}, nil
-		}
-		models := strings.Split(modelCSV, ",")
-		if len(models) == 0 {
-			return ctrl.Result{}, nil
-		}
-		for _, model := range models {
-			r.setModelMapping(strings.TrimSpace(model), d.Name)
-		}
-	}
+	return ctrl.Result{}, r.addDeployment(ctx, d)
+}
 
+func (r *Manager) addDeployment(ctx context.Context, d appsv1.Deployment) error {
+	models := getModelsFromAnnotation(d.GetAnnotations())
+	if len(models) == 0 {
+		return nil
+	}
+	for _, model := range models {
+		r.setModelMapping(strings.TrimSpace(model), d.Name)
+	}
 	var scale autoscalingv1.Scale
 	if err := r.SubResource("scale").Get(ctx, &d, &scale); err != nil {
-		return ctrl.Result{}, fmt.Errorf("get scale: %w", err)
+		return fmt.Errorf("get scale: %w", err)
 	}
 
-	deploymentName := req.Name
+	deploymentName := d.Name
 	r.getScaler(deploymentName).UpdateState(
 		scale.Spec.Replicas,
 		getAnnotationInt32(d.GetAnnotations(), lingoDomain+"/min-replicas", 0),
 		getAnnotationInt32(d.GetAnnotations(), lingoDomain+"/max-replicas", 3),
 	)
 
-	return ctrl.Result{}, nil
+	return nil
+}
+
+func getModelsFromAnnotation(ann map[string]string) []string {
+	if len(ann) == 0 {
+		return []string{}
+	}
+	modelCSV, ok := ann[lingoDomain+"/models"]
+	if !ok {
+		return []string{}
+	}
+	return strings.Split(modelCSV, ",")
 }
 
 func (r *Manager) removeDeployment(req ctrl.Request) {
@@ -190,6 +202,31 @@ func (r *Manager) ResolveDeployment(model string) (string, bool) {
 	deploy, ok := r.modelToDeployment[model]
 	r.modelToDeploymentMtx.RUnlock()
 	return deploy, ok
+}
+
+// Bootstrap initializes the Manager by retrieving a list of deployments from the k8s cluster and adding them to the Manager's internal state.
+func (r *Manager) Bootstrap(ctx context.Context) error {
+	var sliceList appsv1.DeploymentList
+	if err := r.List(ctx, &sliceList, client.InNamespace(r.Namespace)); err != nil {
+		return fmt.Errorf("list deployments: %w", err)
+	}
+	for _, d := range sliceList.Items {
+		if err := r.addDeployment(ctx, d); err != nil {
+			return err
+		}
+	}
+	r.bootstrapped.Store(true)
+	return nil
+}
+
+// ReadinessChecker checks if the Manager state is loaded and ready to handle requests.
+// It returns an error if Manager is not bootstrapped yet.
+// To be used with sigs.k8s.io/controller-runtime manager `AddReadyzCheck`
+func (r *Manager) ReadinessChecker(_ *http.Request) error {
+	if !r.bootstrapped.Load() {
+		return fmt.Errorf("not boostrapped yet")
+	}
+	return nil
 }
 
 func getAnnotationInt32(ann map[string]string, key string, defaultValue int32) int32 {

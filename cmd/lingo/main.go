@@ -107,6 +107,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("clientset: %w", err)
 	}
+	ctx := ctrl.SetupSignalHandler()
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -134,6 +135,9 @@ func run() error {
 	deploymentManager.Namespace = namespace
 	deploymentManager.ScaleDownPeriod = time.Duration(scaleDownDelay) * time.Second
 	deployments.NewMetricsCollector(deploymentManager).MustRegister(metricsRegistry)
+	if err := mgr.AddReadyzCheck("readyz", deploymentManager.ReadinessChecker); err != nil {
+		return fmt.Errorf("setup readiness handler: %w", err)
+	}
 
 	autoscaler, err := autoscaler.New(mgr)
 	if err != nil {
@@ -156,8 +160,6 @@ func run() error {
 		Queues: queueManager,
 	}
 	statsServer := &http.Server{Addr: ":8083", Handler: statsHandler}
-
-	ctx := ctrl.SetupSignalHandler()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -187,6 +189,13 @@ func run() error {
 		wg.Wait()
 		setupLog.Info("manager stopped")
 	}()
+
+	if ok := mgr.GetCache().WaitForCacheSync(ctx); !ok {
+		return fmt.Errorf("client cache could not be synced")
+	}
+	if err := deploymentManager.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("bootstrap deloyment manager: %w", err)
+	}
 
 	if err := proxyServer.ListenAndServe(); err != nil {
 		return fmt.Errorf("listen and serve: %w", err)
