@@ -47,8 +47,6 @@ type Autoscaler struct {
 	Queues      *queue.Manager
 	Endpoints   *endpoints.Manager
 
-	ConcurrencyPerReplica int
-
 	HTTPClient *http.Client
 
 	movingAvgQueueSizeMtx sync.Mutex
@@ -97,7 +95,7 @@ func (a *Autoscaler) Start() {
 			avg := a.getMovingAvgQueueSize(deploymentName)
 			avg.Next(float64(waitCount))
 			flt := avg.Calculate()
-			normalized := flt / float64(a.ConcurrencyPerReplica)
+			normalized := flt / float64(a.Queues.GetCurrencyPerReplica(deploymentName))
 			ceil := math.Ceil(normalized)
 			log.Printf("Average for deployment: %s: %v (ceil: %v), current wait count: %v", deploymentName, flt, ceil, waitCount)
 			a.Deployments.SetDesiredScale(deploymentName, int32(ceil))

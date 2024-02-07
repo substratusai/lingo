@@ -78,14 +78,14 @@ func TestMain(m *testing.M) {
 	})
 	requireNoError(err)
 
-	const concurrencyPerReplica = 1
-	queueManager = queue.NewManager(concurrencyPerReplica)
+	const defaultConcurrencyPerReplica = 100
+	queueManager = queue.NewManager(defaultConcurrencyPerReplica)
 
 	endpointManager, err := endpoints.NewManager(mgr)
 	requireNoError(err)
 	endpointManager.EndpointSizeCallback = queueManager.UpdateQueueSizeForReplicas
 
-	deploymentManager, err := deployments.NewManager(mgr)
+	deploymentManager, err := deployments.NewManager(mgr, queueManager)
 	requireNoError(err)
 	deploymentManager.Namespace = testNamespace
 	deploymentManager.ScaleDownPeriod = 1 * time.Second
@@ -101,7 +101,6 @@ func TestMain(m *testing.M) {
 	autoscaler.LeaderElection = le
 	autoscaler.Deployments = deploymentManager
 	autoscaler.Queues = queueManager
-	autoscaler.ConcurrencyPerReplica = concurrencyPerReplica
 	autoscaler.Endpoints = endpointManager
 	go autoscaler.Start()
 

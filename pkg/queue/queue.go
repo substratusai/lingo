@@ -9,21 +9,23 @@ import (
 	"time"
 )
 
-func New(initialConcurrency int) *Queue {
+func New(initialConcurrency int, concurrencyPerReplica uint32) *Queue {
 	return &Queue{
-		concurrency: initialConcurrency,
-		list:        list.New(),
-		enqueued:    make(chan struct{}),
-		completed:   make(chan struct{}),
+		concurrency:           initialConcurrency,
+		concurrencyPerReplica: concurrencyPerReplica,
+		list:                  list.New(),
+		enqueued:              make(chan struct{}),
+		completed:             make(chan struct{}),
 	}
 }
 
 // Queue is a thread-safe FIFO queue that will limit the number of concurrent
 // requests that can be in progress at any given time.
 type Queue struct {
-	// concurrency is the max number of in progress items.
-	concurrency    int
 	concurrencyMtx sync.RWMutex
+	// concurrency is the max number of in progress items.
+	concurrency           int
+	concurrencyPerReplica uint32
 
 	list    *list.List
 	listMtx sync.Mutex
@@ -166,10 +168,25 @@ func (q *Queue) GetConcurrency() int {
 	return q.concurrency
 }
 
-func (q *Queue) SetConcurrency(n int) {
+func (q *Queue) setConcurrency(n int) {
 	q.concurrencyMtx.Lock()
 	q.concurrency = n
 	q.concurrencyMtx.Unlock()
+}
+
+// setConcurrencyByPerReplica updates the total concurrency and per replica value
+func (q *Queue) setConcurrencyByPerReplica(newPerReplica uint32) {
+	q.concurrencyMtx.Lock()
+	defer q.concurrencyMtx.Unlock()
+
+	if q.concurrencyPerReplica == newPerReplica {
+		return
+	}
+
+	replicas := q.concurrency / int(q.concurrencyPerReplica)
+	q.concurrency = replicas * int(newPerReplica)
+	q.concurrencyPerReplica = newPerReplica
+	return
 }
 
 // TotalCount returns all requests that have made a call to EnqueueAndWait()
@@ -178,7 +195,7 @@ func (q *Queue) TotalCount() int64 {
 	return q.totalCount.Load()
 }
 
-// inProgressCount returns all requests that have been dequeued
+// InProgressCount returns all requests that have been dequeued
 // but have not yet completed.
 func (q *Queue) InProgressCount() int64 {
 	return q.inProgressCount.Load()

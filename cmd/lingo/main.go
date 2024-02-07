@@ -115,7 +115,7 @@ func run() error {
 	}
 	le := leader.NewElection(clientset, hostname, namespace)
 
-	queueManager := queue.NewManager(concurrencyPerReplica)
+	queueManager := queue.NewManager(uint32(concurrencyPerReplica))
 	metricsRegistry := prometheus.WrapRegistererWithPrefix("lingo_", metrics.Registry)
 	queue.NewMetricsCollector(queueManager).MustRegister(metricsRegistry)
 
@@ -128,7 +128,7 @@ func run() error {
 	// Exclude this instance from being scraped by itself.
 	endpointManager.ExcludePods[hostname] = struct{}{}
 
-	deploymentManager, err := deployments.NewManager(mgr)
+	deploymentManager, err := deployments.NewManager(mgr, queueManager)
 	if err != nil {
 		return fmt.Errorf("setting up deloyment manager: %w", err)
 	}
@@ -147,7 +147,6 @@ func run() error {
 	autoscaler.AverageCount = 10 // 10 * 3 seconds = 30 sec avg
 	autoscaler.LeaderElection = le
 	autoscaler.Deployments = deploymentManager
-	autoscaler.ConcurrencyPerReplica = concurrencyPerReplica
 	autoscaler.Queues = queueManager
 	autoscaler.Endpoints = endpointManager
 	go autoscaler.Start()

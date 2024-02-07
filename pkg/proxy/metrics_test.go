@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/substratusai/lingo/pkg/queue"
+
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -53,7 +55,7 @@ func TestMetrics(t *testing.T) {
 			registry := prometheus.NewPedanticRegistry()
 			MustRegister(registry)
 
-			deplMgr, err := deployments.NewManager(&fakeManager{})
+			deplMgr, err := deployments.NewManager(&fakeManager{}, queue.NewManager(100))
 			require.NoError(t, err)
 			h := NewHandler(deplMgr, nil, nil)
 			recorder := httptest.NewRecorder()

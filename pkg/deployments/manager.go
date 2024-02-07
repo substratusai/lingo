@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/substratusai/lingo/pkg/queue"
+
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,11 +23,13 @@ import (
 
 const lingoDomain = "lingo.substratus.ai"
 
-func NewManager(mgr ctrl.Manager) (*Manager, error) {
-	r := &Manager{}
-	r.Client = mgr.GetClient()
-	r.scalers = map[string]*scaler{}
-	r.modelToDeployment = map[string]string{}
+func NewManager(mgr ctrl.Manager, qManager *queue.Manager) (*Manager, error) {
+	r := &Manager{
+		Client:            mgr.GetClient(),
+		scalers:           make(map[string]*scaler),
+		modelToDeployment: make(map[string]string),
+		queueManager:      qManager,
+	}
 	if err := r.SetupWithManager(mgr); err != nil {
 		return nil, err
 	}
@@ -38,6 +42,8 @@ type Manager struct {
 	Namespace string
 
 	ScaleDownPeriod time.Duration
+
+	queueManager *queue.Manager
 
 	scalersMtx sync.Mutex
 
@@ -94,6 +100,10 @@ func (r *Manager) addDeployment(ctx context.Context, d appsv1.Deployment) error 
 	}
 
 	deploymentName := d.Name
+	r.queueManager.SetCurrencyPerReplica(deploymentName, uint32(
+		getAnnotationInt32(d.GetAnnotations(), lingoDomain+"/concurrency", 0),
+	))
+
 	r.getScaler(deploymentName).UpdateState(
 		scale.Spec.Replicas,
 		getAnnotationInt32(d.GetAnnotations(), lingoDomain+"/min-replicas", 0),

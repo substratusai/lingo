@@ -154,7 +154,7 @@ func TestHandleModelUndeployment(t *testing.T) {
 func requireDeploymentReplicas(t *testing.T, deploy *appsv1.Deployment, n int32) {
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		err := testK8sClient.Get(testCtx, types.NamespacedName{Namespace: deploy.Namespace, Name: deploy.Name}, deploy)
-		assert.NoError(t, err, "getting the deployment")
+		require.NoError(t, err, "getting the deployment")
 		assert.NotNil(t, deploy.Spec.Replicas, "scale-up should have occurred")
 		assert.Equal(t, n, *deploy.Spec.Replicas, "scale-up should have occurred")
 	}, 3*time.Second, time.Second/2, "waiting for the deployment to be scaled up")
@@ -197,7 +197,8 @@ func testDeployment(name string) *appsv1.Deployment {
 				"app": name,
 			},
 			Annotations: map[string]string{
-				"lingo.substratus.ai/models": name,
+				"lingo.substratus.ai/models":      name,
+				"lingo.substratus.ai/concurrency": "1",
 			},
 		},
 		Spec: appsv1.DeploymentSpec{

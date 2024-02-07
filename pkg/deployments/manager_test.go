@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/substratusai/lingo/pkg/queue"
+
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,6 +118,7 @@ func TestAddDeployment(t *testing.T) {
 				Namespace:         "default",
 				modelToDeployment: make(map[string]string),
 				scalers:           map[string]*scaler{},
+				queueManager:      queue.NewManager(100),
 			}
 
 			// when

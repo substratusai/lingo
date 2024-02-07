@@ -6,17 +6,20 @@ import (
 	"sync"
 )
 
-func NewManager(concurrencyPerReplica int) *Manager {
-	m := &Manager{}
-	m.queues = map[string]*Queue{}
-	m.concurrencyPerReplica = concurrencyPerReplica
-	return m
+func NewManager(concurrencyPerReplica uint32) *Manager {
+	if concurrencyPerReplica == 0 {
+		panic("empty value")
+	}
+	return &Manager{
+		queues:                       make(map[string]*Queue),
+		defaultConcurrencyPerReplica: concurrencyPerReplica,
+	}
 }
 
-// Manager manages the a set of Queues (for Deployments).
+// Manager manages the set of Queues (for Deployments).
 type Manager struct {
-	// concurrencyPerReplica of each queue for each deployment replica.
-	concurrencyPerReplica int
+	// defaultConcurrencyPerReplica of each queue for each deployment replica.
+	defaultConcurrencyPerReplica uint32
 
 	mtx    sync.RWMutex
 	queues map[string]*Queue
@@ -53,9 +56,10 @@ func (m *Manager) EnqueueAndWait(ctx context.Context, deploymentName, id string)
 // UpdateQueueSizeForReplicas updates the queue size for the given deployment name.
 func (m *Manager) UpdateQueueSizeForReplicas(deploymentName string, replicas int) {
 	// max is needed to prevent the queue size from being set to 0
-	newSize := max(replicas*m.concurrencyPerReplica, m.concurrencyPerReplica)
+	perReplica := int(m.GetCurrencyPerReplica(deploymentName))
+	newSize := max(replicas*perReplica, perReplica)
 	log.Printf("Updating queue size: deployment: %v, replicas: %v, newSize: %v", deploymentName, replicas, newSize)
-	m.getQueue(deploymentName).SetConcurrency(newSize)
+	m.getQueue(deploymentName).setConcurrency(newSize)
 }
 
 // getQueue returns the queue for the given model name.
@@ -65,9 +69,23 @@ func (m *Manager) getQueue(deploymentName string) *Queue {
 	defer m.mtx.Unlock()
 	q, ok := m.queues[deploymentName]
 	if !ok {
-		q = New(m.concurrencyPerReplica)
+		q = New(int(m.defaultConcurrencyPerReplica), m.defaultConcurrencyPerReplica)
 		m.queues[deploymentName] = q
 		go q.Start()
 	}
 	return q
+}
+
+func (r *Manager) GetCurrencyPerReplica(deployment string) uint32 {
+	return r.getQueue(deployment).concurrencyPerReplica
+}
+
+// SetCurrencyPerReplica updates the concurrency value per replica for a specific deployment.
+// If the provided value is 0, it sets the concurrency value to the default value.
+// This function updates the concurrency value directly on the queue associated with the deployment.
+func (r *Manager) SetCurrencyPerReplica(deploymentName string, newPerReplica uint32) {
+	if newPerReplica == 0 {
+		newPerReplica = r.defaultConcurrencyPerReplica
+	}
+	r.getQueue(deploymentName).setConcurrencyByPerReplica(newPerReplica)
 }
