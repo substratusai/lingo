@@ -3,6 +3,7 @@ package queue
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -152,7 +153,10 @@ func (q *Queue) Start() {
 			continue
 		}
 
-		itm := e.Value.(*item)
+		itm, ok := e.Value.(*item)
+		if !ok {
+			panic(fmt.Sprintf("invalid type: %T", e.Value))
+		}
 		q.dequeue(itm, true)
 		log.Println("Dequeued: ", itm.id)
 

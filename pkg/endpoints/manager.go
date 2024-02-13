@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	disv1 "k8s.io/api/discovery/v1"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -113,7 +112,7 @@ func (r *Manager) getEndpoints(service string) *endpointGroup {
 // AwaitHostAddress returns the host address with the lowest number of in-flight requests. It will block until the host address
 // becomes available or the context times out.
 //
-// It returns a string in the format "host:port" or error on timeout
+// It returns a string in the format "host:port" or error on timeout.
 func (r *Manager) AwaitHostAddress(ctx context.Context, service, portName string) (string, error) {
 	return r.getEndpoints(service).getBestHost(ctx, portName)
 }

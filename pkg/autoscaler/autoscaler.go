@@ -10,15 +10,16 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/substratusai/lingo/pkg/deployments"
 	"github.com/substratusai/lingo/pkg/endpoints"
 	"github.com/substratusai/lingo/pkg/leader"
 	"github.com/substratusai/lingo/pkg/movingaverage"
 	"github.com/substratusai/lingo/pkg/queue"
 	"github.com/substratusai/lingo/pkg/stats"
-	corev1 "k8s.io/api/core/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func New(mgr ctrl.Manager) (*Autoscaler, error) {
@@ -55,15 +56,15 @@ type Autoscaler struct {
 	movingAvgQueueSize    map[string]*movingaverage.Simple
 }
 
-func (r *Autoscaler) SetupWithManager(mgr ctrl.Manager) error {
+func (a *Autoscaler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.ConfigMap{}).
-		Complete(r)
+		Complete(a)
 }
 
-func (r *Autoscaler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (a *Autoscaler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var cm corev1.ConfigMap
-	if err := r.Get(ctx, req.NamespacedName, &cm); err != nil {
+	if err := a.Get(ctx, req.NamespacedName, &cm); err != nil {
 		return ctrl.Result{}, fmt.Errorf("get: %w", err)
 	}
 
@@ -105,15 +106,15 @@ func (a *Autoscaler) Start() {
 	}
 }
 
-func (r *Autoscaler) getMovingAvgQueueSize(deploymentName string) *movingaverage.Simple {
-	r.movingAvgQueueSizeMtx.Lock()
-	a, ok := r.movingAvgQueueSize[deploymentName]
+func (a *Autoscaler) getMovingAvgQueueSize(deploymentName string) *movingaverage.Simple {
+	a.movingAvgQueueSizeMtx.Lock()
+	avg, ok := a.movingAvgQueueSize[deploymentName]
 	if !ok {
-		a = movingaverage.NewSimple(make([]float64, r.AverageCount))
-		r.movingAvgQueueSize[deploymentName] = a
+		avg = movingaverage.NewSimple(make([]float64, a.AverageCount))
+		a.movingAvgQueueSize[deploymentName] = avg
 	}
-	r.movingAvgQueueSizeMtx.Unlock()
-	return a
+	a.movingAvgQueueSizeMtx.Unlock()
+	return avg
 }
 
 func aggregateStats(s stats.Stats, httpc *http.Client, endpoints []string) (stats.Stats, []error) {
@@ -126,7 +127,7 @@ func aggregateStats(s stats.Stats, httpc *http.Client, endpoints []string) (stat
 	for _, endpoint := range endpoints {
 		fetched, err := getStats(httpc, "http://"+endpoint)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("getting stats: %v: %v", endpoint, err))
+			errs = append(errs, fmt.Errorf("getting stats: %v: %w", endpoint, err))
 			continue
 		}
 		for k, v := range fetched.ActiveRequests {

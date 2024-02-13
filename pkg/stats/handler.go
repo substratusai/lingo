@@ -12,7 +12,7 @@ type Handler struct {
 	Queues *queue.Manager
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	if err := json.NewEncoder(w).Encode(Stats{
 		ActiveRequests: h.Queues.TotalCounts(),
 	}); err != nil {

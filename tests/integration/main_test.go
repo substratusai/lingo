@@ -11,12 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/substratusai/lingo/pkg/autoscaler"
-	"github.com/substratusai/lingo/pkg/deployments"
-	"github.com/substratusai/lingo/pkg/endpoints"
-	"github.com/substratusai/lingo/pkg/leader"
-	"github.com/substratusai/lingo/pkg/proxy"
-	"github.com/substratusai/lingo/pkg/queue"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +21,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/substratusai/lingo/pkg/autoscaler"
+	"github.com/substratusai/lingo/pkg/deployments"
+	"github.com/substratusai/lingo/pkg/endpoints"
+	"github.com/substratusai/lingo/pkg/leader"
+	"github.com/substratusai/lingo/pkg/proxy"
+	"github.com/substratusai/lingo/pkg/queue"
 )
 
 var (

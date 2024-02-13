@@ -93,37 +93,37 @@ func (e *endpointGroup) getPort(portName string) int32 {
 	return e.ports[portName]
 }
 
-func (g *endpointGroup) lenIPs() int {
-	g.mtx.RLock()
-	defer g.mtx.RUnlock()
-	return len(g.endpoints)
+func (e *endpointGroup) lenIPs() int {
+	e.mtx.RLock()
+	defer e.mtx.RUnlock()
+	return len(e.endpoints)
 }
 
-func (g *endpointGroup) setIPs(ips map[string]struct{}, ports map[string]int32) {
-	g.mtx.Lock()
-	g.ports = ports
+func (e *endpointGroup) setIPs(ips map[string]struct{}, ports map[string]int32) {
+	e.mtx.Lock()
+	e.ports = ports
 	for ip := range ips {
-		if _, ok := g.endpoints[ip]; !ok {
-			g.endpoints[ip] = endpoint{inFlight: &atomic.Int64{}}
+		if _, ok := e.endpoints[ip]; !ok {
+			e.endpoints[ip] = endpoint{inFlight: &atomic.Int64{}}
 		}
 	}
-	for ip := range g.endpoints {
+	for ip := range e.endpoints {
 		if _, ok := ips[ip]; !ok {
-			delete(g.endpoints, ip)
+			delete(e.endpoints, ip)
 		}
 	}
-	g.mtx.Unlock()
+	e.mtx.Unlock()
 
 	// notify waiting requests
 	if len(ips) > 0 {
-		g.broadcastEndpoints()
+		e.broadcastEndpoints()
 	}
 }
 
-func (g *endpointGroup) broadcastEndpoints() {
-	g.bmtx.Lock()
-	defer g.bmtx.Unlock()
+func (e *endpointGroup) broadcastEndpoints() {
+	e.bmtx.Lock()
+	defer e.bmtx.Unlock()
 
-	close(g.bcast)
-	g.bcast = make(chan struct{})
+	close(e.bcast)
+	e.bcast = make(chan struct{})
 }

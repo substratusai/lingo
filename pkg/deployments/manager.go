@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -150,7 +151,7 @@ func (r *Manager) getScaler(deploymentName string) *scaler {
 }
 
 // getScalesSnapshot returns a snapshot of the stats for all scalers managed by the Manager.
-// The scales are returned as a map, where the keys are the model names
+// The scales are returned as a map, where the keys are the model names.
 func (r *Manager) getScalesSnapshot() map[string]scale {
 	r.scalersMtx.Lock()
 	defer r.scalersMtx.Unlock()
@@ -235,7 +236,7 @@ func (r *Manager) Bootstrap(ctx context.Context) error {
 
 // ReadinessChecker checks if the Manager state is loaded and ready to handle requests.
 // It returns an error if Manager is not bootstrapped yet.
-// To be used with sigs.k8s.io/controller-runtime manager `AddReadyzCheck`
+// To be used with sigs.k8s.io/controller-runtime manager `AddReadyzCheck`.
 func (r *Manager) ReadinessChecker(_ *http.Request) error {
 	if !r.bootstrapped.Load() {
 		return fmt.Errorf("not boostrapped yet")
@@ -258,6 +259,9 @@ func getAnnotationInt32(ann map[string]string, key string, defaultValue int32) i
 		log.Printf("parsing annotation as int: %v", err)
 		return defaultValue
 	}
-
-	return int32(value)
+	if value > math.MaxInt32 {
+		log.Printf("invalid value that exceeds max int32: %d", value)
+		return defaultValue
+	}
+	return int32(value) // #nosec G109 : checked before
 }

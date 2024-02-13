@@ -9,7 +9,7 @@ type MetricsCollector struct {
 	manager           *Manager
 }
 
-// NewMetricsCollector constructor
+// NewMetricsCollector constructor.
 func NewMetricsCollector(m *Manager) *MetricsCollector {
 	if m == nil {
 		panic("manager required")
@@ -22,12 +22,12 @@ func NewMetricsCollector(m *Manager) *MetricsCollector {
 	}
 }
 
-// MustRegister registers all metrics
+// MustRegister registers all metrics.
 func (p *MetricsCollector) MustRegister(r prometheus.Registerer) {
 	r.MustRegister(p)
 }
 
-// Describe sends the super-set of all possible descriptors of metrics
+// Describe sends the super-set of all possible descriptors of metrics.
 func (p *MetricsCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- p.currentScaleDescr
 	descs <- p.minScaleDescr

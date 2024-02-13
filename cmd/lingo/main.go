@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
-
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/substratusai/lingo/pkg/autoscaler"
@@ -27,10 +29,6 @@ import (
 	"github.com/substratusai/lingo/pkg/proxy"
 	"github.com/substratusai/lingo/pkg/queue"
 	"github.com/substratusai/lingo/pkg/stats"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -68,14 +66,18 @@ func run() error {
 	concurrency := getEnvInt("CONCURRENCY", 100)
 	scaleDownDelay := getEnvInt("SCALE_DOWN_DELAY", 30)
 
-	var metricsAddr string
-	var probeAddr string
-	var concurrencyPerReplica int
+	var (
+		metricsAddr           string
+		probeAddr             string
+		concurrencyPerReplica int
+		requestHeaderTimeout  time.Duration // setting to prevent slowloris attack on http server
+	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8082", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.IntVar(&concurrencyPerReplica, "concurrency", concurrency, "the number of simultaneous requests that can be processed by each replica")
 	flag.IntVar(&scaleDownDelay, "scale-down-delay", scaleDownDelay, "seconds to wait before scaling down")
+	flag.DurationVar(&requestHeaderTimeout, "request-header-timeout", 10*time.Second, "amount of time for the client to send headers before a timeout error will occur")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -111,7 +113,7 @@ func run() error {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("getting hostname: %v", err)
+		return fmt.Errorf("getting hostname: %w", err)
 	}
 	le := leader.NewElection(clientset, hostname, namespace)
 
@@ -154,19 +156,19 @@ func run() error {
 
 	proxy.MustRegister(metricsRegistry)
 	proxyHandler := proxy.NewHandler(deploymentManager, endpointManager, queueManager)
-	proxyServer := &http.Server{Addr: ":8080", Handler: proxyHandler}
+	proxyServer := &http.Server{Addr: ":8080", Handler: proxyHandler, ReadHeaderTimeout: requestHeaderTimeout}
 
 	statsHandler := &stats.Handler{
 		Queues: queueManager,
 	}
-	statsServer := &http.Server{Addr: ":8083", Handler: statsHandler}
+	statsServer := &http.Server{Addr: ":8083", Handler: statsHandler, ReadHeaderTimeout: requestHeaderTimeout}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer func() {
-			statsServer.Shutdown(context.Background())
-			proxyServer.Shutdown(context.Background())
+			_ = statsServer.Shutdown(context.Background())
+			_ = proxyServer.Shutdown(context.Background())
 			wg.Done()
 		}()
 		if err := mgr.Start(ctx); err != nil {

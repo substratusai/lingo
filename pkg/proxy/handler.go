@@ -56,7 +56,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		modelName = "unknown"
 		log.Printf("error reading model from request body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Bad request: unable to parse .model from JSON payload"))
+		_, _ = w.Write([]byte("Bad request: unable to parse .model from JSON payload"))
 		return
 	}
 	log.Println("model:", modelName)
@@ -65,7 +65,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		log.Printf("deployment not found for model: %v", err)
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(fmt.Sprintf("Deployment for model not found: %v", modelName)))
+		_, _ = w.Write([]byte(fmt.Sprintf("Deployment for model not found: %v", modelName)))
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, context.Canceled):
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("Request cancelled"))
+			_, _ = w.Write([]byte("Request canceled"))
 			return
 		case errors.Is(err, context.DeadlineExceeded):
 			w.WriteHeader(http.StatusGatewayTimeout)
@@ -112,7 +112,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseModel parses the model name from the request
-// returns empty string when none found or an error for failures on the proxy request object
+// returns empty string when none found or an error for failures on the proxy request object.
 func parseModel(r *http.Request) (string, *http.Request, error) {
 	if model := r.Header.Get("X-Model"); model != "" {
 		return model, r, nil
