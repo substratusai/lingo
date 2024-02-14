@@ -19,7 +19,7 @@ type Manager struct {
 	concurrencyPerReplica int
 
 	mtx    sync.RWMutex
-	queues map[string]*Queue
+	queues map[string]*Queue // deployment to queue
 }
 
 // TotalCounts returns the number of pending or in-progress requests for each deployment name.

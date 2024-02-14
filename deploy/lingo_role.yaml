@@ -30,3 +30,9 @@ rules:
     resources:
       - events
     verbs: ["create", "patch"]
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs: ["get", "list", "watch"]
+

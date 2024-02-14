@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -64,8 +66,14 @@ func TestAddDeployment(t *testing.T) {
 			deployment: appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "my-deployment",
-					Annotations: map[string]string{
-						lingoDomain + "/models": "my-model1",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								lingoDomain + "/models": "my-model1",
+							},
+						},
 					},
 				},
 			},
@@ -77,9 +85,17 @@ func TestAddDeployment(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "my-deployment",
 					Annotations: map[string]string{
-						lingoDomain + "/models":       "my-model1",
 						lingoDomain + "/min-replicas": "2",
 						lingoDomain + "/max-replicas": "5",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								lingoDomain + "/models": "my-model1",
+							},
+						},
 					},
 				},
 			},
@@ -90,8 +106,14 @@ func TestAddDeployment(t *testing.T) {
 			deployment: appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "my-deployment",
-					Annotations: map[string]string{
-						lingoDomain + "/models": "my-model1,my-model2",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								lingoDomain + "/models": "my-model1,my-model2",
+							},
+						},
 					},
 				},
 			},
@@ -103,6 +125,11 @@ func TestAddDeployment(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "my-deployment",
 					Annotations: map[string]string{},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{},
+					},
 				},
 			},
 		},

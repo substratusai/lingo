@@ -127,3 +127,23 @@ func (g *endpointGroup) broadcastEndpoints() {
 	close(g.bcast)
 	g.bcast = make(chan struct{})
 }
+
+func (g *endpointGroup) addEndpoint(ip string, ports map[string]int32) {
+	g.mtx.Lock()
+	defer g.mtx.Unlock()
+	g.ports = ports
+	if _, ok := g.endpoints[ip]; !ok {
+		g.endpoints[ip] = endpoint{inFlight: &atomic.Int64{}}
+		if len(g.endpoints) == 1 {
+			g.broadcastEndpoints()
+		}
+	}
+}
+
+func (g *endpointGroup) removeEndpoint(ip string) {
+	g.mtx.Lock()
+	defer g.mtx.Unlock()
+	if _, ok := g.endpoints[ip]; ok {
+		delete(g.endpoints, ip)
+	}
+}

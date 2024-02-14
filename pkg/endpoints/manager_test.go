@@ -13,7 +13,10 @@ func TestAwaitBestHost(t *testing.T) {
 	const myService = "myService"
 	const myPort = "myPort"
 
-	manager := &Manager{endpoints: make(map[string]*endpointGroup, 1)}
+	manager := &Manager{
+		svcEndpoints: make(map[string]*endpointGroup, 1),
+		podEndpoints: make(map[string]*endpointGroup, 1),
+	}
 	manager.getEndpoints(myService).
 		setIPs(map[string]struct{}{myService: {}}, map[string]int32{myPort: 1})
 

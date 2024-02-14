@@ -71,9 +71,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.Deployments.AtLeastOne(deploy)
 
-	log.Println("Entering queue", id)
+	log.Println("Entering queue", id, deploy)
 	complete := h.Queues.EnqueueAndWait(r.Context(), deploy, id)
-	log.Println("Admitted into queue", id)
+	log.Println("Admitted into queue", id, deploy)
 	defer complete()
 
 	// abort when deployment was removed meanwhile
@@ -85,7 +85,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Waiting for IPs", id)
-	host, err := h.Endpoints.AwaitHostAddress(r.Context(), deploy, "http")
+	host, err := h.Endpoints.AwaitHostAddress(r.Context(), modelName, "http")
 	if err != nil {
 		log.Printf("error while finding the host address %v", err)
 		switch {

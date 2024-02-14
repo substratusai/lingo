@@ -81,7 +81,7 @@ func (r *Manager) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result,
 }
 
 func (r *Manager) addDeployment(ctx context.Context, d appsv1.Deployment) error {
-	models := getModelsFromAnnotation(d.GetAnnotations())
+	models := getModelsFromAnnotation(d.Spec.Template.GetAnnotations())
 	log.Printf("deployment: %v models: %v", d.Name, models)
 	if len(models) == 0 {
 		return nil
@@ -95,7 +95,6 @@ func (r *Manager) addDeployment(ctx context.Context, d appsv1.Deployment) error 
 	}
 
 	deploymentName := d.Name
-
 	r.getScaler(deploymentName).UpdateState(
 		scale.Spec.Replicas,
 		getAnnotationInt32(d.GetAnnotations(), lingoDomain+"/min-replicas", 0),
@@ -106,7 +105,7 @@ func (r *Manager) addDeployment(ctx context.Context, d appsv1.Deployment) error 
 }
 
 func (r *Manager) hasModel(d *appsv1.Deployment) bool {
-	models := getModelsFromAnnotation(d.GetAnnotations())
+	models := getModelsFromAnnotation(d.Spec.Template.GetAnnotations())
 	if len(models) == 0 {
 		return false
 	}
