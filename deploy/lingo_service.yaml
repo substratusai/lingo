@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: lingo
   namespace: default
+  annotations:
+    lingo.substratus.ai/deployment: lingo # make visible for autoscaler
 spec:
   selector:
     app: lingo

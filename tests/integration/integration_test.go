@@ -31,6 +31,7 @@ func TestScaleUpAndDown(t *testing.T) {
 	deploy := testDeployment(modelName)
 
 	require.NoError(t, testK8sClient.Create(testCtx, deploy))
+	require.NoError(t, testK8sClient.Create(testCtx, testService(modelName)))
 
 	backendComplete := make(chan struct{})
 
@@ -47,6 +48,7 @@ func TestScaleUpAndDown(t *testing.T) {
 	require.NoError(t, err)
 	testBackendPort, err := strconv.Atoi(testBackendURL.Port())
 	require.NoError(t, err)
+
 	require.NoError(t, testK8sClient.Create(testCtx,
 		endpointSlice(
 			modelName,
@@ -91,6 +93,7 @@ func TestHandleModelUndeployment(t *testing.T) {
 	deploy := testDeployment(modelName)
 
 	require.NoError(t, testK8sClient.Create(testCtx, deploy))
+	require.NoError(t, testK8sClient.Create(testCtx, testService(modelName)))
 
 	backendComplete := make(chan struct{})
 
@@ -225,13 +228,33 @@ func testDeployment(name string) *appsv1.Deployment {
 	}
 }
 
+func testService(name string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-svc",
+			Namespace: testNamespace,
+			Annotations: map[string]string{
+				"lingo.substratus.ai/deployment": name + "-deploy",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": name,
+			},
+			Ports: []corev1.ServicePort{
+				{Protocol: "TCP", Port: 80},
+			},
+		},
+	}
+}
+
 func endpointSlice(name, ip string, port int32) *disv1.EndpointSlice {
 	return &disv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name + "-deploy",
+			Name:      name + "-endpoint",
 			Namespace: testNamespace,
 			Labels: map[string]string{
-				disv1.LabelServiceName: name + "-deploy",
+				disv1.LabelServiceName: name + "-svc",
 			},
 		},
 		AddressType: disv1.AddressTypeIPv4,
