@@ -63,6 +63,8 @@ func run() error {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	var cfg struct {
+		Hostname string `env:"HOSTNAME"`
+
 		Namespace string `env:"NAMESPACE, default=default"`
 
 		// Concurrency per replica.
@@ -217,6 +219,9 @@ func run() error {
 			endpointManager,
 			queueManager,
 			httpClient,
+			map[string]string{
+				"lingo_hostname": cfg.Hostname,
+			},
 		)
 		if err != nil {
 			return fmt.Errorf("creating messenger[%d]: %w", i, err)

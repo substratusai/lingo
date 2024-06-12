@@ -95,6 +95,7 @@ func shouldReceiveResponseMessage(t *testing.T, model, id string) {
 		]
 	}
 }`, id, model), string(resp.Body))
+	require.Equal(t, "test-value", resp.Metadata["test-meta"])
 }
 
 func sendRequestMessage(t *testing.T, path, modelName, id string) {

@@ -35,6 +35,8 @@ type Messenger struct {
 
 	consecutiveErrorsMtx sync.RWMutex
 	consecutiveErrors    int
+
+	metadata map[string]string
 }
 
 func NewMessenger(
@@ -46,6 +48,7 @@ func NewMessenger(
 	endpoints EndpointManager,
 	queues QueueManager,
 	httpClient *http.Client,
+	metadata map[string]string,
 ) (*Messenger, error) {
 	requests, err := pubsub.OpenSubscription(ctx, requestsURL)
 	if err != nil {
@@ -57,6 +60,10 @@ func NewMessenger(
 		return nil, err
 	}
 
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+
 	return &Messenger{
 		Deployments: deployments,
 		Endpoints:   endpoints,
@@ -65,6 +72,7 @@ func NewMessenger(
 		requests:    requests,
 		responses:   responses,
 		MaxHandlers: maxHandlers,
+		metadata:    metadata,
 	}, nil
 }
 
@@ -282,11 +290,16 @@ func (m *Messenger) sendResponse(req *request, body []byte, statusCode int) {
 		m.addConsecutiveError()
 	}
 
+	meta := map[string]string{
+		"request_message_id": req.msg.LoggableID,
+	}
+	for k, v := range m.metadata {
+		meta[k] = v
+	}
+
 	if err := m.responses.Send(req.ctx, &pubsub.Message{
-		Body: jsonResponse,
-		Metadata: map[string]string{
-			"request_message_id": req.msg.LoggableID,
-		},
+		Body:     jsonResponse,
+		Metadata: meta,
 	}); err != nil {
 		log.Printf("Error sending response for message %s: %v", req.msg.LoggableID, err)
 		m.addConsecutiveError()

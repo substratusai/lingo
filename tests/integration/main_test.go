@@ -156,6 +156,7 @@ func TestMain(m *testing.M) {
 		endpointManager,
 		queueManager,
 		subscriberHTTPClient,
+		map[string]string{"test-meta": "test-value"},
 	)
 	requireNoError(err)
 
