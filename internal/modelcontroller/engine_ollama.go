@@ -57,8 +57,6 @@ func (r *ModelReconciler) oLlamaPodForModel(m *kubeaiv1.Model, c ModelConfig) *c
 		featuresMap[f] = struct{}{}
 	}
 
-	startupProbeScript := ollamaStartupProbeScript(m, c.Source.url)
-
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   m.Namespace,
@@ -105,7 +103,7 @@ func (r *ModelReconciler) oLlamaPodForModel(m *kubeaiv1.Model, c ModelConfig) *c
 						TimeoutSeconds: 60 * 180,
 						ProbeHandler: corev1.ProbeHandler{
 							Exec: &corev1.ExecAction{
-								Command: append([]string{"/bin/bash", "-c"}, startupProbeScript...),
+								Command: ollamaStartupProbeCommand(m, c.Source.url),
 							},
 						},
 					},
@@ -166,46 +164,33 @@ func (r *ModelReconciler) oLlamaPodForModel(m *kubeaiv1.Model, c ModelConfig) *c
 
 }
 
-func ollamaStartupProbeScript(m *kubeaiv1.Model, u modelURL) []string {
-	// Pull model and copy to rename it to Model.metadata.name.
-	// See Ollama issue for rename/copy workaround: https://github.com/ollama/ollama/issues/5914
-	// NOTE: The cp command should just create a pointer to the old model, not copy data
-	// (see https://github.com/ollama/ollama/issues/5914#issuecomment-2248168474).
-	// Use `ollama run` to send a single prompt to ollama to load the model into memory
-	// before the Pod becomes Ready. (by default it will load on the first prompt request).
-	startupScript := []string{}
-	// If the model is using a pvc, we don't want to try to connect/pull a model
-
+func ollamaStartupProbeCommand(m *kubeaiv1.Model, u modelURL) []string {
+	// Pull the model and create an alias matching Model.metadata.name.
+	// Ollama cp creates a manifest pointing to the existing model data:
+	// https://github.com/ollama/ollama/issues/5914
+	// Keep model references out of the shell program. bash -c takes a single
+	// script followed by $0 and positional arguments; separate command words
+	// after -c would only execute /bin/ollama with no arguments.
+	script := ""
+	source := u.ref
 	if u.scheme == "pvc" {
-		// There is a potential race condition when multiple pods try to rename/copy the same model.
-		startupScript = append(startupScript, "/bin/ollama", "cp", u.modelParam, m.Name)
-	} else {
-		if u.pull {
-			pullCmd := []string{"/bin/ollama", "pull"}
-			if u.insecure {
-				pullCmd = append(pullCmd, "--insecure")
-			}
-			// startupScript = fmt.Sprintf("%s %s && /bin/ollama cp %s %s", pullCmd, u.ref, u.ref, m.Name)
-			startupScript = append(startupScript, pullCmd...)
-			startupScript = append(startupScript, u.ref, "&&", "/bin/ollama", "cp", u.ref, m.Name)
+		source = u.modelParam
+	} else if u.pull {
+		if u.insecure {
+			script = `/bin/ollama pull --insecure -- "$1" && `
 		} else {
-			startupScript = append(startupScript, "/bin/ollama", "cp", u.ref, m.Name)
+			script = `/bin/ollama pull -- "$1" && `
 		}
 	}
-
-	// Only run the model if the model has features
-	featuresMap := map[kubeaiv1.ModelFeature]struct{}{}
-	for _, f := range m.Spec.Features {
-		featuresMap[f] = struct{}{}
+	// -- keeps a leading-hyphen reference from being interpreted as a CLI flag.
+	// && propagates each failure and prevents later preparation steps running.
+	script += `/bin/ollama cp -- "$1" "$2"`
+	for _, feature := range m.Spec.Features {
+		if feature == kubeaiv1.ModelFeatureTextGeneration {
+			// Preload before Ready. Embedding-only models do not support run.
+			script += ` && /bin/ollama run -- "$2" hi`
+			break
+		}
 	}
-	if _, ok := featuresMap[kubeaiv1.ModelFeatureTextGeneration]; ok {
-		// NOTE: Embedding text models do not support "ollama run":
-		//
-		// ollama run nomic-embed-text hey
-		// Error: "nomic-embed-text" does not support generate
-		//
-		startupScript = append(startupScript, "&&", "/bin/ollama", "run", m.Name, "hi")
-	}
-
-	return startupScript
+	return []string{"/bin/bash", "-c", script, "ollama-startup", source, m.Name}
 }
