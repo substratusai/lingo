@@ -88,6 +88,11 @@ verify_pod() (
     "http://127.0.0.1:$port/api/tags" --output "$TMP_DIR/$pod-tags.json"
   jq -e --arg model "$model_name:latest" \
     'any(.models[]; .name == $model)' "$TMP_DIR/$pod-tags.json"
+  # The startup probe must preload the alias before the first API request.
+  curl --fail --silent --show-error --max-time 10 \
+    "http://127.0.0.1:$port/api/ps" --output "$TMP_DIR/$pod-loaded.json"
+  jq -e --arg model "$model_name:latest" \
+    'any(.models[]; .name == $model)' "$TMP_DIR/$pod-loaded.json"
   verify_completion "http://127.0.0.1:$port/v1/completions" "$TMP_DIR/$pod-completion.json"
 )
 
