@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"log"
@@ -20,13 +21,14 @@ func TestModelValidation(t *testing.T) {
 		}
 
 	}
-	cases := []struct {
+	type testCase struct {
 		model          v1.Model
 		update         func(*v1.Model)
 		expValid       bool
 		expErrContain  string
 		expErrContains []string
-	}{
+	}
+	cases := []testCase{
 		{
 			model: v1.Model{
 				ObjectMeta: metadata("empty-invalid"),
@@ -464,6 +466,20 @@ func TestModelValidation(t *testing.T) {
 			},
 			expErrContain: "may not be more than 100000 bytes",
 		},
+	}
+	// The CRD rejects shell syntax in references before reconciliation. Query
+	// model parameters are decoded and checked separately by parseModelURL.
+	for i, ref := range []string{
+		"model;id", "model&&id", "model|id", "$(id)", "`id`",
+		"model name", "model\nname", "model%3Bid", "%24%28id%29", "model%0Aname",
+	} {
+		cases = append(cases, testCase{
+			model: v1.Model{
+				ObjectMeta: metadata(fmt.Sprintf("shell-reference-%d", i)),
+				Spec:       v1.ModelSpec{URL: "ollama://" + ref, Engine: "OLlama", Features: []v1.ModelFeature{}},
+			},
+			expErrContain: "spec.url",
+		})
 	}
 	for _, c := range cases {
 		t.Run(c.model.Name, func(t *testing.T) {
